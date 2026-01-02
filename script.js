@@ -2,7 +2,7 @@ async function fetchWeather() {
     let searchInput = document.getElementById("search").value;
     const weatherDataSection = document.getElementById("weather-data");
     weatherDataSection.style.display = "block";
-    const apiKey = "apikey";
+    const apiKey = "apiKey";
 
     if (searchInput == "") {
         weatherDataSection.innerHTML = `
@@ -37,8 +37,9 @@ async function fetchWeather() {
         }
     }
 
+    //Function to get the wheatherData and render
     async function getWeatherData(lon,lat) {
-        const weatherURL = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&lang=es`;
+        const weatherURL = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&lang=en`;
         const response = await fetch(weatherURL);
         if(!response.ok){
             console.log("Bad response! ", response.status);
@@ -60,8 +61,78 @@ async function fetchWeather() {
         console.log(data);
     }
 
+    //Function to get the forecast
+    async function getForecast(lon,lat) {
+        const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${apiKey}&lang=en`;
+        const response = await fetch(forecastUrl);
+        
+        if(!response.ok){
+            console.log("Bad response! ", response.status);
+            return;
+        }
+        return await response.json();
+    }
+
+    function pickDailyFrom3hList(list) {
+        const byDay = {};
+        for (const item of list) {
+            const day = item.dt_txt.slice(0,10);
+            (byDay[day] ||= []).push(item);
+        }
+
+        const daily = [];
+        for (const day of Object.keys(byDay)) {
+            const items = byDay[day];
+
+            let best = items[0];
+            let bestDiff = Infinity;
+
+            for (const it of items) {
+                const hour = Number(it.dt_txt.slice(11,13));
+                const diff = Math.abs(hour - 12);
+                if (diff < bestDiff) {
+                    bestDiff = diff;
+                    best = it;
+                }
+            }
+            daily.push({day, ...best});
+        }
+        daily.sort((a,b) => a.day.localeCompare(b.day));
+        return daily.slice(1,6);
+    }
+
+    //Function to render the forecast
+    function renderForecast(daily){
+        const el = document.getElementById("forecast");
+        if (!el) return;
+        el.style.display = "block";
+
+        el.innerHTML = `
+        <h3>Five days forecast</h3>
+        <div class="forecast-grid">
+            ${daily.map(data => `
+                <div style="border:1px solid #ddd; border-radius:10px; padding:10px; width:150px;">
+                <strong>${data.day}</strong><br/>
+                <img src="https://openweathermap.org/img/wn/${data.weather[0].icon}.png" alt="" />
+                <div>${Math.round(data.main.temp - 273.15)}ºC</div>
+                <small>${data.weather[0].description}</small>
+                </div>
+            `).join("")}
+        </div>
+        `;
+    }
+
     document.getElementById("search").value="";
     const geocodeData = await getLonAndLat();
-    getWeatherData(geocodeData.lon, geocodeData.lat);
+    if (!geocodeData) return;
+
+    const forecastData = await getForecast(geocodeData.lon,geocodeData.lat);
+    console.log("forecastData:", forecastData);
+    if (forecastData?.list) {
+        const daily = pickDailyFrom3hList(forecastData.list);
+        renderForecast(daily);
+    }
+    
+    await getWeatherData(geocodeData.lon,geocodeData.lat);
     
 }
